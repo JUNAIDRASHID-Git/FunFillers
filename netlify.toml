@@ -1,4 +1,5 @@
 [build]
+  command = "if ! command -v flutter &> /dev/null; then git clone https://github.com/flutter/flutter.git -b stable --depth 1 $HOME/flutter && export PATH=\"$PATH:$HOME/flutter/bin\"; fi && flutter build web --release"
   publish = "build/web"
 
 [[redirects]]
