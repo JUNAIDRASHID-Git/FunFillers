@@ -1,6 +1,6 @@
 class ApiConstants {
-  // Toggle to true for local development with Go backend on localhost:5050
-  static const bool useLocalhost = true;
+  // Set to false to connect to production Go backend on Render
+  static const bool useLocalhost = false;
   static const String serverUrl = useLocalhost
       ? 'http://localhost:5050'
       : 'https://ff-backend-klec.onrender.com';

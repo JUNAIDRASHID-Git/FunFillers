@@ -594,9 +594,9 @@ class AppRepositoryImpl implements AppRepository {
           String img = rawImg;
           if (rawImg.isNotEmpty && !rawImg.startsWith('http')) {
             if (rawImg.startsWith('/')) {
-              img = 'http://localhost:5050$rawImg';
+              img = '${ApiConstants.serverUrl}$rawImg';
             } else {
-              img = 'http://localhost:5050/uploads/$rawImg';
+              img = '${ApiConstants.serverUrl}/uploads/$rawImg';
             }
           }
 
