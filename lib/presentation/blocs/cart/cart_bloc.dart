@@ -36,8 +36,16 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         final List dynamicList = jsonDecode(storedCart);
         final loadedItems = dynamicList
             .map((item) => CartItemEntity.fromJson(item as Map<String, dynamic>))
+            .where((item) {
+              final id = item.product.id.toLowerCase();
+              return !id.startsWith('prod_teddy') &&
+                     !id.startsWith('prod_rc') &&
+                     !id.startsWith('prod_building') &&
+                     !id.startsWith('prod_doctor');
+            })
             .toList();
         emit(state.copyWith(items: loadedItems));
+        _saveCartToStorage(loadedItems);
         return;
       }
     } catch (_) {}

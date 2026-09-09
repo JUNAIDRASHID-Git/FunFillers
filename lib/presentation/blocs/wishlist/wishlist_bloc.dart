@@ -11,7 +11,14 @@ class WishlistBloc extends Bloc<WishlistEvent, WishlistState> {
     on<LoadWishlist>((event, emit) async {
       if (repository != null) {
         final favs = await repository!.getWishlist();
-        emit(WishlistState(favorites: favs));
+        final realFavs = favs.where((p) {
+          final id = p.id.toLowerCase();
+          return !id.startsWith('prod_teddy') &&
+                 !id.startsWith('prod_rc') &&
+                 !id.startsWith('prod_building') &&
+                 !id.startsWith('prod_doctor');
+        }).toList();
+        emit(WishlistState(favorites: realFavs));
       } else {
         emit(WishlistState(favorites: state.favorites));
       }

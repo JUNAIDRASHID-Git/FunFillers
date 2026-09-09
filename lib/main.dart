@@ -16,6 +16,7 @@ import 'presentation/blocs/wishlist/wishlist_bloc.dart';
 import 'presentation/blocs/wishlist/wishlist_event.dart';
 import 'presentation/blocs/checkout/checkout_bloc.dart';
 import 'presentation/blocs/order/order_bloc.dart';
+import 'presentation/blocs/address/address_cubit.dart';
 
 import 'firebase_options.dart';
 
@@ -69,6 +70,9 @@ class FunFillersApp extends StatelessWidget {
           ),
           BlocProvider<OrderBloc>(
             create: (context) => OrderBloc(repository: repository),
+          ),
+          BlocProvider<AddressCubit>(
+            create: (context) => AddressCubit(repository: repository)..loadAddresses(),
           ),
         ],
         child: MaterialApp.router(

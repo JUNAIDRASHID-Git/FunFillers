@@ -24,6 +24,8 @@ abstract class AppRepository {
   // Addresses
   Future<List<AddressEntity>> getAddresses();
   Future<AddressEntity> addAddress(AddressEntity address);
+  Future<void> setDefaultAddress(String addressId);
+  Future<void> deleteAddress(String addressId);
 
   // Orders
   Future<List<UserOrderEntity>> getOrders();

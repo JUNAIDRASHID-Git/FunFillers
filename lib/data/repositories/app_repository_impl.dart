@@ -17,15 +17,73 @@ class AppRepositoryImpl implements AppRepository {
   final String baseUrl;
   final AppDataSource? dataSource;
 
+  static const String _addressPrefsKey = 'saved_user_addresses';
+  final List<AddressEntity> _addresses = [];
   UserEntity? _currentUser;
   String? _authToken;
-  final List<AddressEntity> _addresses = List.from(AppDataSource.mockAddresses);
   final List<UserOrderEntity> _orders = [];
 
   AppRepositoryImpl({
     this.baseUrl = ApiConstants.baseUrl,
     this.dataSource,
-  });
+  }) {
+    _loadAddressesFromPrefs();
+  }
+
+  Future<void> _saveAddressesToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final listJson = _addresses.map((a) => {
+        'id': a.id,
+        'name': a.name,
+        'fullAddress': a.fullAddress,
+        'city': a.city,
+        'state': a.state,
+        'pincode': a.pincode,
+        'phone': a.phone,
+        'label': a.label,
+        'isDefault': a.isDefault,
+        'country': a.country,
+        'latitude': a.latitude,
+        'longitude': a.longitude,
+        'altitude': a.altitude,
+      }).toList();
+      await prefs.setString(_addressPrefsKey, jsonEncode(listJson));
+    } catch (e) {
+      debugPrint('Error saving addresses to prefs: $e');
+    }
+  }
+
+  Future<void> _loadAddressesFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_addressPrefsKey);
+      if (raw != null && raw.isNotEmpty) {
+        final List decoded = jsonDecode(raw);
+        _addresses.clear();
+        for (var item in decoded) {
+          final m = item as Map<String, dynamic>;
+          _addresses.add(AddressEntity(
+            id: m['id']?.toString() ?? 'addr_${DateTime.now().millisecondsSinceEpoch}',
+            name: m['name']?.toString() ?? 'Customer',
+            fullAddress: m['fullAddress']?.toString() ?? '',
+            city: m['city']?.toString() ?? '',
+            state: m['state']?.toString() ?? '',
+            pincode: m['pincode']?.toString() ?? '',
+            phone: m['phone']?.toString() ?? '',
+            label: m['label']?.toString() ?? 'Home',
+            isDefault: m['isDefault'] == true,
+            country: m['country']?.toString() ?? 'India',
+            latitude: (m['latitude'] as num?)?.toDouble() ?? 12.9716,
+            longitude: (m['longitude'] as num?)?.toDouble() ?? 77.5946,
+            altitude: (m['altitude'] as num?)?.toDouble() ?? 920.0,
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading addresses from prefs: $e');
+    }
+  }
 
   Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
@@ -418,6 +476,30 @@ class AppRepositoryImpl implements AppRepository {
         await prefs.setString('user_avatar', gAvatar);
         await prefs.setBool('is_google_user', true);
 
+        // Ensure backend auth token is valid and active
+        _authToken = prefs.getString('auth_token');
+        if (_authToken == null || _authToken!.isEmpty) {
+          try {
+            final response = await http.post(
+              Uri.parse('$baseUrl/auth/google'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'email': gEmail,
+                'name': gName,
+                'avatarUrl': gAvatar,
+                'googleId': fbUser.uid,
+              }),
+            );
+            if (response.statusCode == 200 || response.statusCode == 201) {
+              final data = jsonDecode(response.body);
+              _authToken = data['token'] as String?;
+              if (_authToken != null) {
+                await prefs.setString('auth_token', _authToken!);
+              }
+            }
+          } catch (_) {}
+        }
+
         _currentUser = UserEntity(
           id: fbUser.uid,
           name: gName,
@@ -494,9 +576,9 @@ class AppRepositoryImpl implements AppRepository {
         if (products.isNotEmpty) return products;
       }
     } catch (_) {
-      // Graceful fallback to mock products if API fails
+      // Return empty list if API fails
     }
-    return AppDataSource.mockProducts;
+    return [];
   }
 
   @override
@@ -547,13 +629,161 @@ class AppRepositoryImpl implements AppRepository {
 
   @override
   Future<List<AddressEntity>> getAddresses() async {
-    return _addresses;
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/user/addresses'), headers: headers);
+
+      if (response.statusCode == 200) {
+        final List dynamicList = jsonDecode(response.body);
+        _addresses.clear();
+        for (var item in dynamicList) {
+          final m = item as Map<String, dynamic>;
+          _addresses.add(AddressEntity(
+            id: m['id']?.toString() ?? 'addr_${DateTime.now().millisecondsSinceEpoch}',
+            name: m['title']?.toString() ?? m['label']?.toString() ?? m['name']?.toString() ?? 'Home',
+            fullAddress: m['fullAddress']?.toString() ?? '',
+            city: m['city']?.toString() ?? '',
+            state: m['state']?.toString() ?? '',
+            pincode: m['pincode']?.toString() ?? '',
+            phone: m['phone']?.toString() ?? '',
+            label: m['label']?.toString() ?? m['title']?.toString() ?? 'Home',
+            isDefault: m['isDefault'] == true,
+            country: m['country']?.toString() ?? 'India',
+            latitude: (m['latitude'] as num?)?.toDouble() ?? 12.9716,
+            longitude: (m['longitude'] as num?)?.toDouble() ?? 77.5946,
+            altitude: (m['altitude'] as num?)?.toDouble() ?? 0.0,
+          ));
+        }
+        await _saveAddressesToPrefs();
+        return List.from(_addresses);
+      }
+    } catch (e) {
+      debugPrint('Backend getAddresses notice: $e');
+    }
+
+    if (_addresses.isEmpty) {
+      await _loadAddressesFromPrefs();
+    }
+    return List.from(_addresses);
   }
 
   @override
   Future<AddressEntity> addAddress(AddressEntity address) async {
-    _addresses.add(address);
-    return address;
+    final addressId = address.id.isNotEmpty ? address.id : 'addr_${DateTime.now().millisecondsSinceEpoch}';
+
+    final payload = {
+      'id': addressId,
+      'title': address.label.isNotEmpty ? address.label : address.title,
+      'label': address.label.isNotEmpty ? address.label : 'Home',
+      'fullAddress': address.fullAddress,
+      'city': address.city,
+      'state': address.state,
+      'country': address.country.isNotEmpty ? address.country : 'India',
+      'pincode': address.pincode,
+      'latitude': address.latitude,
+      'longitude': address.longitude,
+      'isDefault': true,
+    };
+
+    // 1. Post to backend DB
+    try {
+      final headers = await _getHeaders();
+      await http.post(
+        Uri.parse('$baseUrl/user/addresses'),
+        headers: headers,
+        body: jsonEncode(payload),
+      );
+    } catch (e) {
+      debugPrint('Backend addAddress sync notice: $e');
+    }
+
+    // 2. Update local state & SharedPreferences
+    for (int i = 0; i < _addresses.length; i++) {
+      _addresses[i] = AddressEntity(
+        id: _addresses[i].id,
+        name: _addresses[i].name,
+        fullAddress: _addresses[i].fullAddress,
+        city: _addresses[i].city,
+        state: _addresses[i].state,
+        pincode: _addresses[i].pincode,
+        phone: _addresses[i].phone,
+        label: _addresses[i].label,
+        isDefault: false,
+        country: _addresses[i].country,
+        latitude: _addresses[i].latitude,
+        longitude: _addresses[i].longitude,
+        altitude: _addresses[i].altitude,
+      );
+    }
+
+    final newDefaultAddress = AddressEntity(
+      id: addressId,
+      name: address.name.isNotEmpty ? address.name : (address.label.isNotEmpty ? address.label : 'Home'),
+      fullAddress: address.fullAddress,
+      city: address.city,
+      state: address.state,
+      pincode: address.pincode,
+      phone: address.phone,
+      label: address.label.isNotEmpty ? address.label : 'Home',
+      isDefault: true,
+      country: address.country.isNotEmpty ? address.country : 'India',
+      latitude: address.latitude,
+      longitude: address.longitude,
+      altitude: address.altitude,
+    );
+
+    _addresses.insert(0, newDefaultAddress);
+    await _saveAddressesToPrefs();
+    return newDefaultAddress;
+  }
+
+  @override
+  Future<void> setDefaultAddress(String addressId) async {
+    try {
+      final headers = await _getHeaders();
+      await http.put(
+        Uri.parse('$baseUrl/user/addresses/$addressId/default'),
+        headers: headers,
+      );
+    } catch (e) {
+      debugPrint('Backend setDefaultAddress notice: $e');
+    }
+
+    for (int i = 0; i < _addresses.length; i++) {
+      final isDef = _addresses[i].id == addressId;
+      _addresses[i] = AddressEntity(
+        id: _addresses[i].id,
+        name: _addresses[i].name,
+        fullAddress: _addresses[i].fullAddress,
+        city: _addresses[i].city,
+        state: _addresses[i].state,
+        pincode: _addresses[i].pincode,
+        phone: _addresses[i].phone,
+        label: _addresses[i].label,
+        isDefault: isDef,
+        country: _addresses[i].country,
+        latitude: _addresses[i].latitude,
+        longitude: _addresses[i].longitude,
+        altitude: _addresses[i].altitude,
+      );
+    }
+    await _saveAddressesToPrefs();
+  }
+
+  @override
+  Future<void> deleteAddress(String addressId) async {
+    try {
+      final headers = await _getHeaders();
+      await http.delete(
+        Uri.parse('$baseUrl/user/addresses/$addressId'),
+        headers: headers,
+      );
+    } catch (e) {
+      debugPrint('Backend deleteAddress notice: $e');
+    }
+
+    _addresses.removeWhere((a) => a.id == addressId);
+    await _saveAddressesToPrefs();
   }
 
   @override
@@ -568,16 +798,23 @@ class AppRepositoryImpl implements AppRepository {
           final map = item as Map<String, dynamic>;
           final itemsList = (map['items'] as List? ?? []).map((i) {
             final pMap = i['product'] as Map<String, dynamic>? ?? {};
+
+            final prodId = i['productId']?.toString() ?? pMap['id']?.toString() ?? '';
+            final prodName = i['productName']?.toString() ?? pMap['name']?.toString() ?? pMap['title']?.toString() ?? 'Toy Item';
+            final prodPrice = (i['price'] as num?)?.toDouble() ?? (pMap['price'] as num?)?.toDouble() ?? 0.0;
+            final prodImage = i['imageUrl']?.toString() ?? pMap['imageUrl']?.toString() ?? pMap['mainImage']?.toString() ?? '';
+            final prodCategory = i['category']?.toString() ?? pMap['category']?.toString() ?? 'Toys';
+
             return CartItemEntity(
               product: ProductEntity(
-                id: pMap['id']?.toString() ?? '',
-                title: pMap['name']?.toString() ?? 'Toy Item',
-                category: pMap['category']?.toString() ?? 'Toys',
-                price: (pMap['price'] as num?)?.toDouble() ?? 0.0,
+                id: prodId,
+                title: prodName,
+                category: prodCategory,
+                price: prodPrice,
                 rating: 4.8,
                 reviewCount: 10,
                 description: '',
-                mainImage: pMap['imageUrl']?.toString() ?? '',
+                mainImage: prodImage,
                 galleryImages: [],
               ),
               quantity: (i['quantity'] as num?)?.toInt() ?? 1,
@@ -590,14 +827,24 @@ class AppRepositoryImpl implements AppRepository {
             totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? (map['total'] as num?)?.toDouble() ?? 0.0,
             status: map['status']?.toString() ?? 'Processing',
             paymentMethod: map['paymentMethod']?.toString() ?? 'UPI',
-            shippingAddress: _addresses.first,
+            shippingAddress: _addresses.isNotEmpty ? _addresses.first : AddressEntity(
+              id: 'addr_order',
+              name: map['userName']?.toString() ?? 'Customer',
+              fullAddress: map['shippingAddress']?.toString() ?? 'Delivery Address',
+              city: 'Kochi',
+              isDefault: true,
+            ),
             createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? '') ?? DateTime.now(),
           );
         }).toList();
 
-        if (remoteOrders.isNotEmpty) return remoteOrders;
+        _orders.clear();
+        _orders.addAll(remoteOrders);
+        return remoteOrders;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('getOrders error: $e');
+    }
 
     return _orders;
   }
@@ -609,11 +856,12 @@ class AppRepositoryImpl implements AppRepository {
     String paymentMethod,
     double totalAmount,
   ) async {
-    final newOrder = UserOrderEntity(
-      id: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+    final clientOrderId = 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    UserOrderEntity createdOrder = UserOrderEntity(
+      id: clientOrderId,
       items: items,
       totalAmount: totalAmount,
-      status: 'Processing',
+      status: 'Pending',
       paymentMethod: paymentMethod,
       shippingAddress: shippingAddress,
       createdAt: DateTime.now(),
@@ -634,15 +882,28 @@ class AppRepositoryImpl implements AppRepository {
         'shippingAddress': shippingAddress.fullAddress,
       };
 
-      await http.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/orders'),
         headers: headers,
         body: jsonEncode(bodyData),
       );
-    } catch (_) {}
 
-    _orders.insert(0, newOrder);
-    return newOrder;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final resData = jsonDecode(response.body);
+        if (resData['order'] != null && resData['order']['id'] != null) {
+          createdOrder = createdOrder.copyWith(
+            id: resData['order']['id'].toString(),
+            status: resData['order']['status']?.toString() ?? 'Pending',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Order creation sync notice: $e');
+    }
+
+    _orders.removeWhere((o) => o.id == createdOrder.id);
+    _orders.insert(0, createdOrder);
+    return createdOrder;
   }
 
   final List<ProductEntity> _wishlist = [];

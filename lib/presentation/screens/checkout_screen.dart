@@ -14,8 +14,11 @@ import '../blocs/order/order_bloc.dart';
 import '../blocs/order/order_event.dart';
 import '../blocs/order/order_state.dart';
 import '../widgets/custom_button.dart';
+import '../blocs/address/address_cubit.dart';
 import 'address_selection_screen.dart';
 import 'order_success_screen.dart';
+
+import '../../data/repositories/app_repository_impl.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -26,16 +29,40 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   Address _shippingAddress = const Address(
-    id: 'addr_1',
-    title: 'John Doe',
-    fullAddress: '123 Toy Street, 2nd Floor',
-    city: 'Green Park, Bangalore - 560001',
+    id: 'addr_default',
+    title: 'Home',
+    label: 'Home',
+    fullAddress: 'Detecting address...',
+    city: 'Bengaluru',
     state: 'Karnataka',
     country: 'India',
+    pincode: '560001',
     latitude: 12.9716,
     longitude: 77.5946,
     isDefault: true,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedAddress();
+  }
+
+  Future<void> _loadSavedAddress() async {
+    try {
+      final active = context.read<AddressCubit>().state.activeAddress;
+      if (active != null && mounted) {
+        setState(() => _shippingAddress = active);
+        return;
+      }
+      final repository = RepositoryProvider.of<AppRepositoryImpl>(context, listen: false);
+      final addresses = await repository.getAddresses();
+      if (addresses.isNotEmpty && mounted) {
+        final defaultAddr = addresses.firstWhere((a) => a.isDefault, orElse: () => addresses.first);
+        setState(() => _shippingAddress = defaultAddr);
+      }
+    } catch (_) {}
+  }
 
   final List<Map<String, dynamic>> _paymentMethods = [
     {
@@ -200,6 +227,45 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildShippingAddressSection(BuildContext context) {
+    Future<void> openAddressPicker() async {
+      final addressCubit = context.read<AddressCubit>();
+      final Address? newAddress = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddressSelectionScreen(initialAddress: _shippingAddress),
+        ),
+      );
+      if (newAddress != null) {
+        final newEntity = AddressEntity(
+          id: newAddress.id,
+          name: newAddress.title,
+          fullAddress: newAddress.fullAddress,
+          city: newAddress.city,
+          state: newAddress.state,
+          pincode: newAddress.pincode,
+          label: newAddress.label,
+          isDefault: true,
+          country: newAddress.country,
+          latitude: newAddress.latitude,
+          longitude: newAddress.longitude,
+        );
+        await addressCubit.saveAddress(newEntity);
+        if (mounted) {
+          setState(() => _shippingAddress = newEntity);
+        }
+      }
+    }
+
+    final titleText = _shippingAddress.title.isNotEmpty ? _shippingAddress.title : 'Home';
+    final fullAddrText = _shippingAddress.fullAddress.isNotEmpty
+        ? _shippingAddress.fullAddress
+        : 'Select delivery address';
+    final cityStatePinText = [
+      if (_shippingAddress.city.isNotEmpty) _shippingAddress.city,
+      if (_shippingAddress.state.isNotEmpty) _shippingAddress.state,
+      if (_shippingAddress.pincode.isNotEmpty) _shippingAddress.pincode,
+    ].join(', ');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -215,17 +281,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             TextButton(
-              onPressed: () async {
-                final Address? newAddress = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AddressSelectionScreen(initialAddress: _shippingAddress),
-                  ),
-                );
-                if (newAddress != null) {
-                  setState(() => _shippingAddress = newAddress);
-                }
-              },
+              onPressed: openAddressPicker,
               child: const Text(
                 '+ Add New',
                 style: TextStyle(
@@ -244,19 +300,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.cardBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(
-                  color: AppColors.softPink,
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.location_on_rounded,
-                  color: AppColors.primary,
-                  size: 20,
+                  color: AppColors.accentOrange,
+                  size: 22,
                 ),
               ),
               const SizedBox(width: 12),
@@ -264,47 +328,73 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        Text(
+                          titleText,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _shippingAddress.label,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      _shippingAddress.title,
+                      fullAddrText,
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        height: 1.3,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _shippingAddress.fullAddress,
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                    Text(
-                      _shippingAddress.city,
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
+                    if (cityStatePinText.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        cityStatePinText,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  side: const BorderSide(color: AppColors.cardBorder),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                onPressed: () async {
-                  final Address? newAddress = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AddressSelectionScreen(initialAddress: _shippingAddress),
-                    ),
-                  );
-                  if (newAddress != null) {
-                    setState(() => _shippingAddress = newAddress);
-                  }
-                },
+                onPressed: openAddressPicker,
                 child: const Text(
-                  'Edit',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  'Change',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
             ],
