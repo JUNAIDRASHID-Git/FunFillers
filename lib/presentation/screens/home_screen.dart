@@ -5,14 +5,21 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../data/repositories/app_repository_impl.dart';
 import '../../domain/entities/category.dart';
+import '../../domain/entities/product.dart';
 import '../blocs/product/product_bloc.dart';
 import '../blocs/product/product_event.dart';
 import '../blocs/product/product_state.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../core/constants/api_constants.dart';
 import '../widgets/product_card.dart';
 import '../widgets/location_header_widget.dart';
 import '../widgets/video_background_header.dart';
 import '../widgets/carousel_banner_widget.dart';
+import '../widgets/custom_section_widget.dart';
+import '../../data/models/custom_section_model.dart';
 import 'product_details_screen.dart';
+import 'section_products_screen.dart';
 import 'wishlist_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -25,10 +32,37 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  List<CustomSectionModel> _customSections = [];
+
   @override
   void initState() {
     super.initState();
     context.read<ProductBloc>().add(LoadProductsRequested());
+    _fetchCustomSections();
+  }
+
+  Future<void> _fetchCustomSections() async {
+    try {
+      final res = await http
+          .get(Uri.parse('${ApiConstants.baseUrl}/ui/custom-sections'))
+          .timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List? ?? [];
+        final sections = list
+            .map((e) => CustomSectionModel.fromJson(e as Map<String, dynamic>))
+            .where((s) => s.isActive)
+            .toList();
+
+        sections.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+        if (mounted) {
+          setState(() {
+            _customSections = sections;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -194,15 +228,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 8),
-
-                    // Hero Carousel Banner
-                    CarouselBannerWidget(
-                      onBannerTap: () => widget.onNavigateTab?.call(1),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Category Pills Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -229,6 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 10),
 
+                    // Category Pills Row
                     FutureBuilder<List<CategoryEntity>>(
                       future: context.read<AppRepositoryImpl>().getCategories(),
                       builder: (ctx, snapshot) {
@@ -266,85 +292,169 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Featured Products Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Featured Products',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => widget.onNavigateTab?.call(2),
-                          child: const Text(
-                            'See All',
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
+                    // Hero Carousel Banner
+                    CarouselBannerWidget(
+                      onBannerTap: () => widget.onNavigateTab?.call(1),
                     ),
-                    const SizedBox(height: 14),
 
-                    // Responsive Featured Products Grid
+                    const SizedBox(height: 24),
+
+                    // Custom Showcase Sections (Managed via Admin Panel CMS)
+                    if (_customSections.isNotEmpty) ...[
+                      BlocBuilder<ProductBloc, ProductState>(
+                        builder: (context, state) {
+                          if (state is ProductLoaded) {
+                            final allProducts = state.products;
+                            return Column(
+                              children: _customSections.map((sec) {
+                                final secProducts = sec.productIds.isEmpty
+                                    ? allProducts
+                                    : allProducts
+                                          .where(
+                                            (p) =>
+                                                sec.productIds.contains(p.id),
+                                          )
+                                          .toList();
+
+                                if (secProducts.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return CustomSectionWidget(
+                                  title: sec.title,
+                                  products: secProducts,
+                                  onSeeAll: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => SectionProductsScreen(
+                                          title: sec.title,
+                                          products: secProducts,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  onProductTap: (product) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ProductDetailsScreen(
+                                          product: product,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              }).toList(),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ],
+
+                    // Featured Products Section (Light Blue Container with 1px Blue Border & Horizontal Scroll)
                     BlocBuilder<ProductBloc, ProductState>(
                       builder: (context, state) {
-                        if (state is ProductLoading) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(32),
-                              child: CircularProgressIndicator(
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          );
-                        }
-                        if (state is ProductLoaded) {
-                          final featured = state.products;
-                          final crossAxisCount =
-                              Responsive.getGridCrossAxisCount(context);
-                          final childAspectRatio =
-                              Responsive.getGridChildAspectRatio(context);
+                        final featured =
+                            state is ProductLoaded ? state.products : <ProductEntity>[];
 
-                          return GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  childAspectRatio: childAspectRatio,
-                                  crossAxisSpacing: 14,
-                                  mainAxisSpacing: 14,
-                                ),
-                            itemCount: featured.length,
-                            itemBuilder: (ctx, idx) {
-                              final product = featured[idx];
-                              return ProductCard(
-                                product: product,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ProductDetailsScreen(
-                                        product: product,
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFF3B82F6),
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Featured Products',
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SectionProductsScreen(
+                                            title: 'Featured Products',
+                                            products: featured,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text(
+                                      'See All',
+                                      style: TextStyle(
+                                        color: Color(0xFF2563EB),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
                                       ),
                                     ),
-                                  );
-                                },
-                              );
-                            },
-                          );
-                        }
-                        return const SizedBox.shrink();
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              if (state is ProductLoading)
+                                const SizedBox(
+                                  height: 270,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                  ),
+                                )
+                              else if (state is ProductLoaded)
+                                SizedBox(
+                                  height: 270,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    physics: const BouncingScrollPhysics(),
+                                    itemCount: featured.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(width: 14),
+                                    itemBuilder: (ctx, idx) {
+                                      final product = featured[idx];
+                                      return SizedBox(
+                                        width: 165,
+                                        child: ProductCard(
+                                          product: product,
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => ProductDetailsScreen(
+                                                  product: product,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              else
+                                const SizedBox.shrink(),
+                            ],
+                          ),
+                        );
                       },
                     ),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
