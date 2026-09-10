@@ -55,22 +55,33 @@ class SignUpScreen extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      // FunFillers App Logo Card
                       Container(
-                        width: 110,
-                        height: 110,
+                        width: 120,
+                        height: 120,
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: AppColors.accentYellow,
-                          borderRadius: BorderRadius.circular(24),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: const Color(0xFFE2E8F0),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
                         child: Center(
-                          child: Image.network(
-                            'https://images.unsplash.com/photo-1558060370-d644479be6f7?auto=format&fit=crop&w=200&q=80',
-                            width: 85,
-                            height: 85,
+                          child: Image.asset(
+                            'assets/images/fun_fillers_logo.png',
                             fit: BoxFit.contain,
                             errorBuilder: (_, _, _) => const Icon(
                               Icons.smart_toy_rounded,
-                              size: 48,
+                              size: 52,
                               color: AppColors.primary,
                             ),
                           ),

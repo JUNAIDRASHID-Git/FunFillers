@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/theme/app_colors.dart';
+import 'skeleton_widget.dart';
 
 class BannerItemData {
   final String id;
@@ -149,90 +150,163 @@ class _CarouselBannerWidgetState extends State<CarouselBannerWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.sizeOf(context).width;
+    final bool isDesktop = screenWidth >= 900;
+    final bool isTablet = screenWidth >= 600 && screenWidth < 900;
+
+    final double maxBannerHeight = isDesktop
+        ? 340.0
+        : isTablet
+            ? 280.0
+            : 220.0;
+    final double bannerAspectRatio = isDesktop
+        ? 2.6 / 1
+        : isTablet
+            ? 2.1 / 1
+            : 16 / 9;
+
     if (_isLoading) {
-      return AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: AppColors.inputBackground,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Center(
-            child: CircularProgressIndicator(
-              color: AppColors.primary,
-              strokeWidth: 2,
-            ),
-          ),
-        ),
-      );
+      return const CarouselBannerSkeleton();
     }
 
     if (_banners.isEmpty) return const SizedBox.shrink();
 
     return Column(
       children: [
-        // ── 16:9 Aspect Ratio Carousel Slider ────────────────────────────────
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: PageView.builder(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                _currentPage = index;
-              });
-            },
-            itemCount: _banners.length,
-            itemBuilder: (context, index) {
-              final banner = _banners[index];
-              return GestureDetector(
-                onTap: widget.onBannerTap,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: banner.isVideo
-                      ? _CarouselVideoPlayer(videoUrl: banner.imageUrl)
-                      : Image.network(
-                          banner.imageUrl,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          loadingBuilder: (_, child, progress) {
-                            if (progress == null) return child;
-                            return Container(
-                              color: AppColors.inputBackground,
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: AppColors.primary,
-                                  strokeWidth: 2,
+        // ── Responsive Aspect Ratio & Constrained Carousel Slider ─────────────
+        Container(
+          constraints: BoxConstraints(maxHeight: maxBannerHeight),
+          child: AspectRatio(
+            aspectRatio: bannerAspectRatio,
+            child: Stack(
+              children: [
+                PageView.builder(
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPage = index;
+                    });
+                  },
+                  itemCount: _banners.length,
+                  itemBuilder: (context, index) {
+                    final banner = _banners[index];
+                    return RepaintBoundary(
+                      child: GestureDetector(
+                        onTap: widget.onBannerTap,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: banner.isVideo
+                              ? _CarouselVideoPlayer(videoUrl: banner.imageUrl)
+                              : Image.network(
+                                  banner.imageUrl,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 1200,
+                                  filterQuality: FilterQuality.medium,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                loadingBuilder: (_, child, progress) {
+                                  if (progress == null) return child;
+                                  return Container(
+                                    color: AppColors.inputBackground,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.primary,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  color: AppColors.inputBackground,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported_rounded,
+                                      size: 48,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: AppColors.inputBackground,
-                            child: const Center(
-                              child: Icon(
-                                Icons.image_not_supported_rounded,
-                                size: 48,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                          ),
                         ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+
+                // ── Desktop Navigation Controls ──────────────────────────────
+                if (isDesktop && _banners.length > 1) ...[
+                  Positioned(
+                    left: 12,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          onPressed: () {
+                            if (_pageController.hasClients) {
+                              final prevPage = (_currentPage - 1 + _banners.length) % _banners.length;
+                              _pageController.animateToPage(
+                                prevPage,
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 12,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          onPressed: () {
+                            if (_pageController.hasClients) {
+                              final nextPage = (_currentPage + 1) % _banners.length;
+                              _pageController.animateToPage(
+                                nextPage,
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeInOut,
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 12),

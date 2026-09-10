@@ -59,14 +59,20 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     AddToCartRequested event,
     Emitter<CartState> emit,
   ) {
+    final maxStock = event.product.stock;
+    if (maxStock <= 0) return;
+
     final currentItems = List<CartItemEntity>.from(state.items);
     final idx = currentItems.indexWhere((i) => i.product.id == event.product.id);
 
     if (idx != -1) {
       final item = currentItems[idx];
-      currentItems[idx] = item.copyWith(quantity: item.quantity + event.quantity);
+      final targetQty = item.quantity + event.quantity;
+      final clampedQty = (maxStock > 0 && targetQty > maxStock) ? maxStock : targetQty;
+      currentItems[idx] = item.copyWith(quantity: clampedQty);
     } else {
-      currentItems.add(CartItemEntity(product: event.product, quantity: event.quantity, isSelected: true));
+      final clampedQty = (maxStock > 0 && event.quantity > maxStock) ? maxStock : event.quantity;
+      currentItems.add(CartItemEntity(product: event.product, quantity: clampedQty, isSelected: true));
     }
 
     emit(state.copyWith(items: currentItems));
@@ -94,7 +100,10 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     final currentItems = List<CartItemEntity>.from(state.items);
     final idx = currentItems.indexWhere((i) => i.product.id == event.productId);
     if (idx != -1) {
-      currentItems[idx] = currentItems[idx].copyWith(quantity: event.quantity);
+      final item = currentItems[idx];
+      final maxStock = item.product.stock;
+      final clampedQty = (maxStock > 0 && event.quantity > maxStock) ? maxStock : event.quantity;
+      currentItems[idx] = item.copyWith(quantity: clampedQty);
       emit(state.copyWith(items: currentItems));
       _saveCartToStorage(currentItems);
     }

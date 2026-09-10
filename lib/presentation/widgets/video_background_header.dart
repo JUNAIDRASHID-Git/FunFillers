@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import '../../core/constants/api_constants.dart';
-import '../../core/theme/app_colors.dart';
 
 /// Fetches the hero video config from the backend and plays the video URL
 /// if one has been uploaded by the admin. Falls back to the local asset
@@ -110,59 +109,77 @@ class _VideoBackgroundHeaderState extends State<VideoBackgroundHeader> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // ── Background Video / Gradient Fallback ──────────────────────────
-        Positioned.fill(
-          child: _isInitialized && _controller != null
-              ? ClipRect(
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: _controller!.value.size.width > 0
-                          ? _controller!.value.size.width
-                          : 16.0,
-                      height: _controller!.value.size.height > 0
-                          ? _controller!.value.size.height
-                          : 9.0,
-                      child: VideoPlayer(_controller!),
-                    ),
-                  ),
-                )
-              : Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFE2E8F0), Color(0xFFF8FAFC)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-        ),
-
-        // ── Bottom fade gradient — blends into page body ───────────────────
-        Positioned.fill(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.transparent,
-                  AppColors.background.withValues(alpha: 0.35),
-                  AppColors.background.withValues(alpha: 0.85),
-                  AppColors.background,
-                ],
-                stops: const [0.0, 0.65, 0.82, 0.93, 1.0],
+    return Container(
+      color: Colors.white,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // ── Background Video / Gradient Fallback ──────────────────────────
+          Positioned.fill(
+            child: ClipRect(
+              child: RepaintBoundary(
+                child: _isInitialized && _controller != null
+                    ? FittedBox(
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: _controller!.value.size.width > 0
+                              ? _controller!.value.size.width
+                              : 16.0,
+                          height: _controller!.value.size.height > 0
+                              ? _controller!.value.size.height
+                              : 9.0,
+                          child: VideoPlayer(_controller!),
+                        ),
+                      )
+                    : Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFFE2E8F0), Color(0xFFFFFFFF)],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                        ),
+                      ),
               ),
             ),
           ),
-        ),
 
-        // ── Child Content (Greeting, Location, Search) ────────────────────
-        widget.child,
-      ],
+          // ── Bottom fade gradient — blends 100% seamlessly into page body ───────
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.transparent,
+                    Color(0x80FFFFFF),
+                    Color(0xFFFFFFFF),
+                    Color(0xFFFFFFFF),
+                  ],
+                  stops: [0.0, 0.40, 0.68, 0.88, 1.0],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Solid white bottom cover to eliminate HTML video / GPU subpixel seam ──
+          Positioned(
+            left: -10,
+            right: -10,
+            bottom: -5,
+            height: 20,
+            child: Container(
+              color: Colors.white,
+            ),
+          ),
+
+          // ── Child Content (Greeting, Location, Search) ────────────────────
+          widget.child,
+        ],
+      ),
     );
   }
 }

@@ -18,9 +18,13 @@ import '../widgets/video_background_header.dart';
 import '../widgets/carousel_banner_widget.dart';
 import '../widgets/custom_section_widget.dart';
 import '../../data/models/custom_section_model.dart';
+import '../widgets/skeleton_widget.dart';
+import '../widgets/app_search_bar_widget.dart';
 import 'product_details_screen.dart';
 import 'section_products_screen.dart';
 import 'wishlist_screen.dart';
+import 'search_catalog_screen.dart';
+import 'category_products_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Function(int)? onNavigateTab;
@@ -71,6 +75,9 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -176,47 +183,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 16),
 
                       // Search Bar Button
-                      GestureDetector(
-                        onTap: () =>
-                            widget.onNavigateTab?.call(2), // Jump to Search tab
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.cardBorder),
-                            boxShadow: AppColors.cardShadow,
-                          ),
-                          child: Row(
-                            children: const [
-                              Icon(
-                                Icons.search_rounded,
-                                color: AppColors.textSecondary,
-                                size: 20,
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Search for toys, brands...',
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.tune_rounded,
-                                color: AppColors.primary,
-                                size: 20,
-                              ),
-                            ],
+                      AppSearchBarWidget(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SearchCatalogScreen(),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                     ],
                   ),
                 ),
@@ -228,6 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 5),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -259,15 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       future: context.read<AppRepositoryImpl>().getCategories(),
                       builder: (ctx, snapshot) {
                         if (!snapshot.hasData) {
-                          return const SizedBox(
-                            height: 70,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: AppColors.primary,
-                                strokeWidth: 2,
-                              ),
-                            ),
-                          );
+                          return const CategoryListSkeleton();
                         }
                         final categories = snapshot.data!;
                         final colors = [
@@ -356,8 +324,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Featured Products Section (Light Blue Container with 1px Blue Border & Horizontal Scroll)
                     BlocBuilder<ProductBloc, ProductState>(
                       builder: (context, state) {
-                        final featured =
-                            state is ProductLoaded ? state.products : <ProductEntity>[];
+                        final featured = state is ProductLoaded
+                            ? state.products
+                            : <ProductEntity>[];
 
                         return Container(
                           padding: const EdgeInsets.all(16),
@@ -373,7 +342,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text(
                                     'Featured Products',
@@ -409,12 +379,20 @@ class _HomeScreenState extends State<HomeScreen> {
                               const SizedBox(height: 12),
 
                               if (state is ProductLoading)
-                                const SizedBox(
+                                SizedBox(
                                   height: 270,
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      color: Color(0xFF2563EB),
-                                    ),
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: 4,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(width: 14),
+                                    itemBuilder: (context, index) =>
+                                        const SizedBox(
+                                          width: 165,
+                                          child: ProductCardSkeleton(),
+                                        ),
                                   ),
                                 )
                               else if (state is ProductLoaded)
@@ -436,9 +414,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
-                                                builder: (_) => ProductDetailsScreen(
-                                                  product: product,
-                                                ),
+                                                builder: (_) =>
+                                                    ProductDetailsScreen(
+                                                      product: product,
+                                                    ),
                                               ),
                                             );
                                           },
@@ -472,8 +451,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return GestureDetector(
       onTap: () {
-        context.read<ProductBloc>().add(SearchProductsRequested(cat.name));
-        widget.onNavigateTab?.call(2);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CategoryProductsScreen(title: cat.name),
+          ),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.only(right: 14),

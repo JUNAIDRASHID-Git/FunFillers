@@ -4,9 +4,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme/app_colors.dart';
 import '../blocs/cart/cart_bloc.dart';
 import '../blocs/cart/cart_state.dart';
+import '../blocs/auth/auth_bloc.dart';
+import '../blocs/auth/auth_state.dart';
+import '../blocs/address/address_cubit.dart';
 import 'home_screen.dart';
 import 'category_list_screen.dart';
-import 'search_catalog_screen.dart';
 import 'cart_screen.dart';
 import 'profile_screen.dart';
 
@@ -25,11 +27,26 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentIndex = _clampIndex(widget.initialIndex);
+  }
+
+  @override
+  void didUpdateWidget(covariant MainLayoutScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialIndex != widget.initialIndex) {
+      setState(() {
+        _currentIndex = _clampIndex(widget.initialIndex);
+      });
+    }
+  }
+
+  int _clampIndex(int index) {
+    if (index < 0 || index >= 4) return 0;
+    return index;
   }
 
   void _onTabTapped(int index) {
-    setState(() => _currentIndex = index);
+    setState(() => _currentIndex = _clampIndex(index));
   }
 
   String _getSvgPath(int index, bool isSelected) {
@@ -42,11 +59,11 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
         return isSelected
             ? 'assets/icons/category_active.svg'
             : 'assets/icons/category.svg';
-      case 3:
+      case 2:
         return isSelected
             ? 'assets/icons/shopping_active.svg'
             : 'assets/icons/shopping.svg';
-      case 4:
+      case 3:
         return 'assets/icons/profile.svg';
       default:
         return '';
@@ -58,7 +75,6 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
     final List<Widget> pages = [
       HomeScreen(onNavigateTab: _onTabTapped),
       CategoryListScreen(onNavigateTab: _onTabTapped),
-      const SearchCatalogScreen(),
       const CartScreen(),
       const ProfileScreen(),
     ];
@@ -113,9 +129,8 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
                   // Navigation Links List
                   _buildSidebarSvgItem(0, 'Home'),
                   _buildSidebarSvgItem(1, 'Category'),
-                  _buildSidebarIconItem(2, Icons.search_rounded, 'Search'),
-                  _buildCartSidebarItem(3),
-                  _buildSidebarSvgItem(4, 'Profile'),
+                  _buildCartSidebarItem(2),
+                  _buildSidebarSvgItem(3, 'Profile'),
 
                   const Spacer(),
                   // Footer info
@@ -153,43 +168,49 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
 
             // Main Content Body Area
             Expanded(
-              child: IndexedStack(index: _currentIndex, children: pages),
+              child: IndexedStack(index: _clampIndex(_currentIndex), children: pages),
             ),
           ],
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: IndexedStack(index: _currentIndex, children: pages),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          border: const Border(
-            top: BorderSide(color: AppColors.cardBorder, width: 1),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 16,
-              offset: const Offset(0, -4),
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is Authenticated || state is Unauthenticated) {
+          context.read<AddressCubit>().loadAddresses();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: IndexedStack(index: _clampIndex(_currentIndex), children: pages),
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: const Border(
+              top: BorderSide(color: AppColors.cardBorder, width: 1),
             ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildSvgNavItem(0, 'Home'),
-                _buildSvgNavItem(1, 'Category'),
-                _buildIconNavItem(2, Icons.search_rounded, 'Search'),
-                _buildCartNavItem(3),
-                _buildSvgNavItem(4, 'Profile'),
-              ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildSvgNavItem(0, 'Home'),
+                  _buildSvgNavItem(1, 'Category'),
+                  _buildCartNavItem(2),
+                  _buildSvgNavItem(3, 'Profile'),
+                ],
+              ),
             ),
           ),
         ),
@@ -233,36 +254,6 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
     );
   }
 
-  Widget _buildIconNavItem(int index, IconData icon, String label) {
-    final isSelected = _currentIndex == index;
-    return InkWell(
-      onTap: () => _onTabTapped(index),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.primary : AppColors.textMuted,
-              size: 22,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppColors.primary : AppColors.textMuted,
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSidebarSvgItem(int index, String label) {
     final isSelected = _currentIndex == index;
     final svgAsset = _getSvgPath(index, isSelected);
@@ -281,35 +272,6 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
               isSelected ? Colors.white : AppColors.textSecondary,
               BlendMode.srcIn,
             ),
-          ),
-          title: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : AppColors.textPrimary,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              fontSize: 14,
-            ),
-          ),
-          onTap: () => _onTabTapped(index),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSidebarIconItem(int index, IconData icon, String label) {
-    final isSelected = _currentIndex == index;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Material(
-        color: isSelected ? AppColors.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: ListTile(
-          leading: Icon(
-            icon,
-            color: isSelected ? Colors.white : AppColors.textSecondary,
           ),
           title: Text(
             label,

@@ -6,6 +6,7 @@ import '../../core/utils/responsive.dart';
 import '../blocs/auth/auth_bloc.dart';
 import '../blocs/auth/auth_event.dart';
 import '../blocs/auth/auth_state.dart';
+import '../blocs/address/address_cubit.dart';
 import 'address_selection_screen.dart';
 import 'order_history_screen.dart';
 import 'wishlist_screen.dart';
@@ -47,22 +48,32 @@ class ProfileScreen extends StatelessWidget {
             String email = 'guest@funfillers.com';
             String? avatarUrl;
             bool isGuest = true;
+            String userId = '';
 
             if (state is Authenticated) {
               name = state.user.isGuest ? 'Guest User' : state.user.name;
               email = state.user.isGuest ? 'guest@funfillers.com' : state.user.email;
               avatarUrl = state.user.avatarUrl;
               isGuest = state.user.isGuest;
+              userId = state.user.id;
             }
 
             return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 20),
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
               child: MaxWidthContainer(
                 maxWidth: 680,
                 child: Column(
                   children: [
                     // User Profile Header Card
-                    Center(
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.cardBorder),
+                        boxShadow: AppColors.cardShadow,
+                      ),
                       child: Column(
                         children: [
                           Container(
@@ -120,11 +131,29 @@ class ProfileScreen extends StatelessWidget {
                               color: AppColors.textMuted,
                             ),
                           ),
+                          if (!isGuest && userId.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.cardPink.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Account ID: ${userId.length > 16 ? "${userId.substring(0, 16)}..." : userId}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
 
                     // Menu Items Container
                     Material(
@@ -156,6 +185,7 @@ class ProfileScreen extends StatelessWidget {
                               icon: Icons.location_on_outlined,
                               title: 'My Addresses',
                               onTap: () {
+                                context.read<AddressCubit>().loadAddresses();
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(

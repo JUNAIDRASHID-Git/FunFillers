@@ -6,8 +6,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart' hide Path;
-
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/theme/app_colors.dart';
 import '../../domain/entities/address.dart';
+import '../blocs/auth/auth_bloc.dart';
+import '../blocs/auth/auth_state.dart';
+import '../blocs/address/address_cubit.dart';
 
 class AddressSelectionScreen extends StatefulWidget {
   final Address? initialAddress;
@@ -32,29 +37,43 @@ class _AddressSelectionScreenState extends State<AddressSelectionScreen> {
   double _currentLat = 12.9716;
   double _currentLng = 77.5946;
 
+  bool _isGeocoding = false;
   String _localityName = 'Detecting location...';
-  String _subAddressLine = 'Locating area details...';
+  String _subAddressLine = '';
   String _distanceNotice = 'Delivering to this location';
 
-  bool _isGeocoding = false;
-  bool _isSearching = false;
-  bool _isLocating = false;
+  Timer? _debounceTimer;
   bool _isCameraMoving = false;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<Map<String, dynamic>> _searchResults = [];
-  Timer? _debounceTimer;
+  bool _isSearching = false;
+  bool _isLocating = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = context.read<AuthBloc>().state;
+      final bool isGuest = authState is! Authenticated || authState.user.isGuest;
+      if (isGuest && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please sign in to select or set delivery location.'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        context.pushReplacement('/signin');
+      }
+    });
+
     if (widget.initialAddress != null) {
       _selectedAddress = widget.initialAddress!;
       _currentLat = _selectedAddress.latitude;
       _currentLng = _selectedAddress.longitude;
-      _initialLat = _currentLat;
-      _initialLng = _currentLng;
+      _initialLat = _selectedAddress.latitude;
+      _initialLng = _selectedAddress.longitude;
       _localityName = _selectedAddress.title.isNotEmpty
           ? _selectedAddress.title
           : _selectedAddress.city;
@@ -390,7 +409,282 @@ class _AddressSelectionScreenState extends State<AddressSelectionScreen> {
 
 
   void _confirmAndSubmitAddress() {
-    Navigator.pop(context, _selectedAddress);
+    _showSaveAddressBottomSheet(context);
+  }
+
+  void _showSaveAddressBottomSheet(BuildContext context) {
+    String selectedLabel = 'Home';
+    final houseCtrl = TextEditingController();
+    final landmarkCtrl = TextEditingController();
+    final nameCtrl = TextEditingController(text: _selectedAddress.name.isNotEmpty ? _selectedAddress.name : '');
+    final phoneCtrl = TextEditingController(text: _selectedAddress.phone.isNotEmpty ? _selectedAddress.phone : '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+                top: 20,
+                left: 20,
+                right: 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Save Delivery Address',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Address: ${_selectedAddress.fullAddress}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Save As Tag',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: ['Home', 'Work', 'Apartment', 'Other'].map((label) {
+                        final isSelected = selectedLabel == label;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(label),
+                            selected: isSelected,
+                            selectedColor: AppColors.primary,
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            labelStyle: TextStyle(
+                              color: isSelected ? Colors.white : AppColors.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12.5,
+                            ),
+                            onSelected: (_) {
+                              setModalState(() => selectedLabel = label);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: houseCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'House / Flat / Building No.',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: landmarkCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Landmark / Floor (Optional)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Contact Name',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'Phone Number',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3866DF),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          final String fullAddStr = [
+                            if (houseCtrl.text.trim().isNotEmpty) houseCtrl.text.trim(),
+                            if (landmarkCtrl.text.trim().isNotEmpty) landmarkCtrl.text.trim(),
+                            _selectedAddress.fullAddress,
+                          ].join(', ');
+
+                          final finalAddress = Address(
+                            id: 'addr_${DateTime.now().millisecondsSinceEpoch}',
+                            name: nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : 'Customer',
+                            fullAddress: fullAddStr,
+                            city: _selectedAddress.city,
+                            state: _selectedAddress.state,
+                            country: _selectedAddress.country,
+                            pincode: _selectedAddress.pincode,
+                            phone: phoneCtrl.text.trim(),
+                            label: selectedLabel,
+                            latitude: _selectedAddress.latitude,
+                            longitude: _selectedAddress.longitude,
+                            isDefault: true,
+                          );
+
+                          Navigator.pop(ctx);
+                          Navigator.pop(context, finalAddress);
+                        },
+                        child: const Text('Confirm & Save Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSavedLocationsSection(BuildContext context, List<AddressEntity> savedAddresses) {
+    if (savedAddresses.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Your Saved Delivery Locations',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: savedAddresses.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
+            itemBuilder: (ctx, i) {
+              final addr = savedAddresses[i];
+              final isHome = addr.label.toLowerCase().contains('home');
+              final isWork = addr.label.toLowerCase().contains('work');
+
+              IconData labelIcon = Icons.location_on_rounded;
+              if (isHome) labelIcon = Icons.home_rounded;
+              if (isWork) labelIcon = Icons.work_rounded;
+
+              return Container(
+                width: 210,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    final selected = Address(
+                      id: addr.id,
+                      title: addr.name,
+                      label: addr.label,
+                      fullAddress: addr.fullAddress,
+                      city: addr.city,
+                      state: addr.state,
+                      country: addr.country,
+                      pincode: addr.pincode,
+                      phone: addr.phone,
+                      latitude: addr.latitude,
+                      longitude: addr.longitude,
+                      isDefault: true,
+                    );
+                    context.read<AddressCubit>().selectAddress(addr);
+                    Navigator.pop(context, selected);
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(labelIcon, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              addr.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              context.read<AddressCubit>().deleteAddress(addr.id);
+                            },
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 16,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        addr.fullAddress,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
   }
 
   void _zoomIn() {
@@ -409,8 +703,8 @@ class _AddressSelectionScreenState extends State<AddressSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
     final topInset = MediaQuery.of(context).padding.top;
+    final savedAddresses = context.watch<AddressCubit>().state.addresses;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -715,109 +1009,93 @@ class _AddressSelectionScreenState extends State<AddressSelectionScreen> {
             ),
           ),
 
-          // 4. Floating Zoom Controls (+ / -)
+          // 4. Industrial Standard Floating Map Controls (Zoom In/Out + GPS Target Button on Upper Right)
           Positioned(
             right: 16,
-            bottom: 216 + bottomInset,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  InkWell(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                    onTap: _zoomIn,
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(Icons.add, size: 20, color: Color(0xFF1F2937)),
-                    ),
-                  ),
-                  const SizedBox(
-                    width: 24,
-                    child: Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
-                  ),
-                  InkWell(
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                    onTap: _zoomOut,
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(Icons.remove, size: 20, color: Color(0xFF1F2937)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 5. Floating "Current location" Pill Button (Triggers device GPS permission)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 216 + bottomInset,
-            child: Center(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: () => _requestAndFetchDeviceLocation(isUserTriggered: true),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            top: topInset + 72,
+            child: Column(
+              children: [
+                // Zoom (+ / -) Control Stack
+                Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 12,
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                  child: Row(
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_isLocating)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 8),
-                          child: SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFF3866DF),
-                            ),
-                          ),
-                        )
-                      else
-                        Transform.rotate(
-                          angle: -pi / 4,
-                          child: const Icon(
-                            Icons.navigation_rounded,
-                            size: 16,
-                            color: Colors.black,
-                          ),
+                      InkWell(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        onTap: _zoomIn,
+                        child: const Padding(
+                          padding: EdgeInsets.all(11),
+                          child: Icon(Icons.add_rounded, size: 22, color: Color(0xFF1F2937)),
                         ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isLocating ? 'Locating...' : 'Current location',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
+                      ),
+                      const SizedBox(
+                        width: 26,
+                        child: Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+                      ),
+                      InkWell(
+                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                        onTap: _zoomOut,
+                        child: const Padding(
+                          padding: EdgeInsets.all(11),
+                          child: Icon(Icons.remove_rounded, size: 22, color: Color(0xFF1F2937)),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 12),
+
+                // Flipkart / Zomato Style Floating GPS Target Button
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => _requestAndFetchDeviceLocation(isUserTriggered: true),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: _isLocating
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Color(0xFF3866DF),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.my_location_rounded,
+                                size: 22,
+                                color: Color(0xFF3866DF),
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -849,6 +1127,9 @@ class _AddressSelectionScreenState extends State<AddressSelectionScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Saved Delivery Locations Carousel
+                          _buildSavedLocationsSection(context, savedAddresses),
+
                           // Inner Location Info Box
                           Container(
                             clipBehavior: Clip.antiAlias,

@@ -3,7 +3,7 @@ import '../../core/theme/app_colors.dart';
 
 class CustomButton extends StatelessWidget {
   final String text;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final IconData? icon;
   final bool isSecondary;
   final bool isOutlined;
@@ -13,7 +13,7 @@ class CustomButton extends StatelessWidget {
     super.key,
     String? text,
     String? label,
-    required this.onPressed,
+    this.onPressed,
     this.icon,
     this.isSecondary = false,
     this.isOutlined = false,
@@ -22,10 +22,14 @@ class CustomButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color bg = isSecondary
-        ? AppColors.primaryLight
-        : (isOutlined ? Colors.transparent : AppColors.primary);
-    Color fg = isOutlined ? AppColors.primary : Colors.white;
+    Color bg = onPressed == null
+        ? AppColors.inputBackground
+        : (isSecondary
+            ? AppColors.primaryLight
+            : (isOutlined ? Colors.transparent : AppColors.primary));
+    Color fg = onPressed == null
+        ? AppColors.textMuted
+        : (isOutlined ? AppColors.primary : Colors.white);
 
     return ElevatedButton(
       onPressed: isLoading ? null : onPressed,

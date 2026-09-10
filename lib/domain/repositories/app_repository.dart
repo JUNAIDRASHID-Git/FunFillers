@@ -35,6 +35,7 @@ abstract class AppRepository {
     String paymentMethod,
     double totalAmount,
   );
+  Future<Map<String, dynamic>> cancelOrder(String orderId, {String? reason});
 
   // Wishlist
   Future<List<ProductEntity>> getWishlist();

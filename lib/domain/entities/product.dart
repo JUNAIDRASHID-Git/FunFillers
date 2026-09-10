@@ -5,6 +5,9 @@ class ProductEntity extends Equatable {
   final String id;
   final String title;
   final String category;
+  final String categoryId;
+  final String subCategory;
+  final String subCategoryId;
   final String targetGender; // 'Boys', 'Girls', 'Educational', 'All'
   final double price;
   final double? originalPrice;
@@ -24,6 +27,9 @@ class ProductEntity extends Equatable {
     required this.id,
     required this.title,
     required this.category,
+    this.categoryId = '',
+    this.subCategory = '',
+    this.subCategoryId = '',
     this.targetGender = 'All',
     required this.price,
     this.originalPrice,
@@ -41,11 +47,17 @@ class ProductEntity extends Equatable {
   ProductEntity copyWith({
     bool? isFavorite,
     int? stock,
+    String? categoryId,
+    String? subCategory,
+    String? subCategoryId,
   }) {
     return ProductEntity(
       id: id,
       title: title,
       category: category,
+      categoryId: categoryId ?? this.categoryId,
+      subCategory: subCategory ?? this.subCategory,
+      subCategoryId: subCategoryId ?? this.subCategoryId,
       targetGender: targetGender,
       price: price,
       originalPrice: originalPrice,
@@ -66,6 +78,9 @@ class ProductEntity extends Equatable {
       'id': id,
       'title': title,
       'category': category,
+      'categoryId': categoryId,
+      'subCategory': subCategory,
+      'subCategoryId': subCategoryId,
       'targetGender': targetGender,
       'price': price,
       'originalPrice': originalPrice,
@@ -127,6 +142,9 @@ class ProductEntity extends Equatable {
       id: json['id']?.toString() ?? '',
       title: json['name']?.toString() ?? json['title']?.toString() ?? 'Toy Item',
       category: json['category']?.toString() ?? 'Toys',
+      categoryId: json['categoryId']?.toString() ?? json['category_id']?.toString() ?? '',
+      subCategory: json['subCategory']?.toString() ?? json['sub_category']?.toString() ?? '',
+      subCategoryId: json['subCategoryId']?.toString() ?? json['sub_category_id']?.toString() ?? '',
       targetGender: json['targetGender']?.toString() ?? json['target_gender']?.toString() ?? 'All',
       price: p,
       originalPrice: origP,
@@ -147,6 +165,9 @@ class ProductEntity extends Equatable {
         id,
         title,
         category,
+        categoryId,
+        subCategory,
+        subCategoryId,
         targetGender,
         price,
         originalPrice,

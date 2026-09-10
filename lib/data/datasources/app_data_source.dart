@@ -18,30 +18,50 @@ class AppDataSource {
       name: 'Action Figures',
       iconImage: 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=200&q=80',
       itemCount: 124,
+      subCategories: [
+        SubCategoryEntity(id: 'sub_1', categoryId: 'cat_action', name: 'Superheroes', iconImage: 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=200&q=80', description: 'Avengers & Spider-Man'),
+        SubCategoryEntity(id: 'sub_2', categoryId: 'cat_action', name: 'Anime Collectibles', iconImage: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=200&q=80', description: 'Statues & Figurines'),
+      ],
     ),
     const CategoryEntity(
       id: 'cat_dolls',
       name: 'Dolls',
       iconImage: 'https://images.unsplash.com/photo-1566576721346-d4a3b4eaeb55?auto=format&fit=crop&w=200&q=80',
       itemCount: 98,
+      subCategories: [
+        SubCategoryEntity(id: 'sub_3', categoryId: 'cat_dolls', name: 'Teddy Bears', iconImage: 'https://images.unsplash.com/photo-1558060370-d644479be6f7?auto=format&fit=crop&w=200&q=80', description: 'Plush & Soft Bears'),
+        SubCategoryEntity(id: 'sub_4', categoryId: 'cat_dolls', name: 'Fashion Dolls', iconImage: 'https://images.unsplash.com/photo-1566576721346-d4a3b4eaeb55?auto=format&fit=crop&w=200&q=80', description: 'Princess & Fashion Dolls'),
+      ],
     ),
     const CategoryEntity(
       id: 'cat_building',
       name: 'Building Blocks',
       iconImage: 'https://images.unsplash.com/photo-1587654780291-39c9404d746b?auto=format&fit=crop&w=200&q=80',
       itemCount: 76,
+      subCategories: [
+        SubCategoryEntity(id: 'sub_5', categoryId: 'cat_building', name: 'Wooden Blocks', iconImage: 'https://images.unsplash.com/photo-1587654780291-39c9404d746b?auto=format&fit=crop&w=200&q=80', description: 'Educational Wooden Sets'),
+        SubCategoryEntity(id: 'sub_6', categoryId: 'cat_building', name: 'Construction Sets', iconImage: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=200&q=80', description: 'Lego style bricks'),
+      ],
     ),
     const CategoryEntity(
       id: 'cat_vehicles',
       name: 'Vehicles',
       iconImage: 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?auto=format&fit=crop&w=200&q=80',
       itemCount: 112,
+      subCategories: [
+        SubCategoryEntity(id: 'sub_7', categoryId: 'cat_vehicles', name: 'RC Cars', iconImage: 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?auto=format&fit=crop&w=200&q=80', description: 'Remote Stunt Vehicles'),
+        SubCategoryEntity(id: 'sub_8', categoryId: 'cat_vehicles', name: 'Diecast Models', iconImage: 'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?auto=format&fit=crop&w=200&q=80', description: 'Scale Metal Cars'),
+      ],
     ),
     const CategoryEntity(
       id: 'cat_educational',
       name: 'Educational',
       iconImage: 'https://images.unsplash.com/photo-1500995617113-cf789362a3e1?auto=format&fit=crop&w=200&q=80',
       itemCount: 64,
+      subCategories: [
+        SubCategoryEntity(id: 'sub_9', categoryId: 'cat_educational', name: 'STEM Puzzles', iconImage: 'https://images.unsplash.com/photo-1500995617113-cf789362a3e1?auto=format&fit=crop&w=200&q=80', description: 'Logic & Science Kits'),
+        SubCategoryEntity(id: 'sub_10', categoryId: 'cat_educational', name: 'Musical Toys', iconImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=200&q=80', description: 'Instruments & Guitars'),
+      ],
     ),
     const CategoryEntity(
       id: 'cat_outdoor',
@@ -164,17 +184,5 @@ class AppDataSource {
     ),
   ];
 
-  static final List<AddressEntity> mockAddresses = [
-    const AddressEntity(
-      id: 'addr_home',
-      name: 'John Doe',
-      fullAddress: '123 Toy Street, 2nd Floor, Green Park',
-      city: 'Bangalore',
-      state: 'Karnataka',
-      pincode: '560001',
-      phone: '+91 9876543210',
-      label: 'Home',
-      isDefault: true,
-    ),
-  ];
+  static final List<AddressEntity> mockAddresses = [];
 }

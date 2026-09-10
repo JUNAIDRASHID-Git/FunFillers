@@ -51,6 +51,38 @@
     }
   </script>
 
+  <!-- Razorpay Standard Web Checkout -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    window.openRazorpayCheckout = function(optionsJson, successCallback, failureCallback) {
+      try {
+        var options = typeof optionsJson === 'string' ? JSON.parse(optionsJson) : optionsJson;
+        options.handler = function(response) {
+          if (typeof successCallback === 'function') {
+            successCallback(
+              response.razorpay_payment_id || '',
+              response.razorpay_order_id || '',
+              response.razorpay_signature || ''
+            );
+          }
+        };
+
+        var rzp = new Razorpay(options);
+        rzp.on('payment.failed', function(response) {
+          var msg = (response && response.error && response.error.description) ? response.error.description : 'Payment Failed';
+          if (typeof failureCallback === 'function') {
+            failureCallback(msg);
+          }
+        });
+        rzp.open();
+      } catch (err) {
+        if (typeof failureCallback === 'function') {
+          failureCallback(err.message || 'Failed to open Razorpay modal');
+        }
+      }
+    };
+  </script>
+
   <div id="recaptcha-container"></div>
   <script src="flutter_bootstrap.js" async></script>
 </body>

@@ -9,6 +9,7 @@ class OrderBloc extends Bloc<OrderEvent, OrderState> {
   OrderBloc({required this.repository}) : super(OrderInitial()) {
     on<PlaceOrderRequested>(_onPlaceOrderRequested);
     on<LoadOrdersRequested>(_onLoadOrdersRequested);
+    on<CancelOrderRequested>(_onCancelOrderRequested);
   }
 
   Future<void> _onPlaceOrderRequested(
@@ -34,6 +35,19 @@ class OrderBloc extends Bloc<OrderEvent, OrderState> {
     Emitter<OrderState> emit,
   ) async {
     try {
+      final orders = await repository.getOrders();
+      emit(OrderLoaded(orders));
+    } catch (e) {
+      emit(OrderFailure(e.toString()));
+    }
+  }
+
+  Future<void> _onCancelOrderRequested(
+    CancelOrderRequested event,
+    Emitter<OrderState> emit,
+  ) async {
+    try {
+      await repository.cancelOrder(event.orderId, reason: event.reason);
       final orders = await repository.getOrders();
       emit(OrderLoaded(orders));
     } catch (e) {

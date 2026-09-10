@@ -33,5 +33,19 @@ class PlaceOrderRequested extends OrderEvent {
 
 class LoadOrdersRequested extends OrderEvent {}
 
+class CancelOrderRequested extends OrderEvent {
+  final String orderId;
+  final String? reason;
+
+  const CancelOrderRequested({
+    required this.orderId,
+    this.reason,
+  });
+
+  @override
+  List<Object?> get props => [orderId, reason];
+}
+
 typedef LoadOrders = LoadOrdersRequested;
 typedef CreateOrder = PlaceOrderRequested;
+typedef CancelOrder = CancelOrderRequested;

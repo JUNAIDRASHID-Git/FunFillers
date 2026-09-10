@@ -67,4 +67,28 @@ class AddressCubit extends Cubit<AddressState> {
       emit(state.copyWith(activeAddress: address));
     }
   }
+
+  Future<void> deleteAddress(String addressId) async {
+    emit(state.copyWith(isLoading: true));
+    try {
+      await repository.deleteAddress(addressId);
+      final updatedList = await repository.getAddresses();
+      AddressEntity? newActive = state.activeAddress;
+      if (newActive?.id == addressId) {
+        newActive = updatedList.isNotEmpty ? updatedList.first : null;
+      }
+      emit(state.copyWith(
+        addresses: updatedList,
+        activeAddress: newActive,
+        clearActiveAddress: newActive == null,
+        isLoading: false,
+      ));
+    } catch (e) {
+      emit(state.copyWith(isLoading: false, error: e.toString()));
+    }
+  }
+
+  void clearAddresses() {
+    emit(const AddressState());
+  }
 }

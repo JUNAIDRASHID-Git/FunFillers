@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../widgets/custom_button.dart';
 import 'main_layout_screen.dart';
+import 'order_history_screen.dart';
 
 class OrderSuccessScreen extends StatelessWidget {
   final String orderId;
@@ -91,12 +92,19 @@ class OrderSuccessScreen extends StatelessWidget {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const MainLayoutScreen(initialIndex: 4),
+                      builder: (_) => const MainLayoutScreen(initialIndex: 3),
                     ),
                     (route) => false,
                   );
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const OrderHistoryScreen(),
+                    ),
+                  );
                 },
               ),
+
               const SizedBox(height: 12),
               CustomButton(
                 text: 'Continue Shopping',

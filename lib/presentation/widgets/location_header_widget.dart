@@ -1,15 +1,32 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/theme/app_colors.dart';
 import '../../domain/entities/address.dart';
 import '../blocs/address/address_cubit.dart';
 import '../blocs/address/address_state.dart';
+import '../blocs/auth/auth_bloc.dart';
+import '../blocs/auth/auth_state.dart';
 import '../screens/address_selection_screen.dart';
 
 class LocationHeaderWidget extends StatelessWidget {
   const LocationHeaderWidget({super.key});
 
   Future<void> _handleAddressTap(BuildContext context, AddressEntity? currentAddress) async {
+    final authState = context.read<AuthBloc>().state;
+    final bool isGuest = authState is! Authenticated || authState.user.isGuest;
+
+    if (isGuest) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please sign in to select or update your delivery location.'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      context.push('/signin');
+      return;
+    }
     Address? addressModel;
     if (currentAddress != null) {
       addressModel = Address(

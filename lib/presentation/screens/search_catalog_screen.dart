@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
+import '../../domain/entities/product.dart';
 import '../blocs/product/product_bloc.dart';
 import '../blocs/product/product_event.dart';
 import '../blocs/product/product_state.dart';
 import '../widgets/product_card.dart';
+import '../widgets/skeleton_widget.dart';
+import '../widgets/app_search_bar_widget.dart';
 import 'product_details_screen.dart';
 
 class SearchCatalogScreen extends StatefulWidget {
@@ -17,12 +20,45 @@ class SearchCatalogScreen extends StatefulWidget {
 
 class _SearchCatalogScreenState extends State<SearchCatalogScreen> {
   final _searchCtrl = TextEditingController();
-  String _activeTab = 'Products'; // 'Products', 'Brands', 'Categories'
+  String _sortBy = 'default'; // 'default', 'low_to_high', 'high_to_low', 'discount'
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Widget _buildSortChip(String label, String value, IconData icon) {
+    final isSelected = _sortBy == value;
+    return ChoiceChip(
+      avatar: Icon(
+        icon,
+        size: 15,
+        color: isSelected ? Colors.white : AppColors.primary,
+      ),
+      label: Text(label),
+      selected: isSelected,
+      selectedColor: AppColors.primary,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
+        width: 1.2,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : const Color(0xFF334155),
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+        fontSize: 13,
+      ),
+      onSelected: (_) {
+        setState(() {
+          _sortBy = value;
+        });
+      },
+    );
   }
 
   @override
@@ -35,78 +71,60 @@ class _SearchCatalogScreenState extends State<SearchCatalogScreen> {
           padding: const EdgeInsets.all(18),
           child: Column(
             children: [
-              // Search Input Row
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.cardBorder),
-                        boxShadow: AppColors.cardShadow,
-                      ),
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (val) {
-                          context.read<ProductBloc>().add(SearchProductsRequested(val));
-                        },
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Search teddy bear, rc car...',
-                          hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
-                          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
-                          suffixIcon: _searchCtrl.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted),
-                                  onPressed: () {
-                                    _searchCtrl.clear();
-                                    context.read<ProductBloc>().add(const SearchProductsRequested(''));
-                                  },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              // Search Input Row with Back Button using reusable AppSearchBarWidget
+              AppSearchBarWidget(
+                readOnly: false,
+                showBackButton: true,
+                controller: _searchCtrl,
+                onChanged: (val) {
+                  setState(() {});
+                  context.read<ProductBloc>().add(SearchProductsRequested(val));
+                },
+                onClear: () {
+                  _searchCtrl.clear();
+                  setState(() {});
+                  context.read<ProductBloc>().add(const SearchProductsRequested(''));
+                },
+                onBackTap: () => Navigator.maybePop(context),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // Filter Sub-Tabs (Products, Brands, Categories)
-              Row(
-                children: ['Products', 'Brands', 'Categories'].map((tab) {
-                  final isSelected = _activeTab == tab;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: ChoiceChip(
-                      label: Text(tab),
-                      selected: isSelected,
-                      selectedColor: AppColors.primary,
-                      backgroundColor: Colors.white,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : AppColors.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                      onSelected: (_) => setState(() => _activeTab = tab),
-                    ),
-                  );
-                }).toList(),
+              // Sorting Filters Row (Price: Low to High, High to Low, Discount)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    _buildSortChip('Default', 'default', Icons.swap_vert_rounded),
+                    const SizedBox(width: 8),
+                    _buildSortChip('Price: Low to High', 'low_to_high', Icons.arrow_upward_rounded),
+                    const SizedBox(width: 8),
+                    _buildSortChip('Price: High to Low', 'high_to_low', Icons.arrow_downward_rounded),
+                    const SizedBox(width: 8),
+                    _buildSortChip('Top Discount', 'discount', Icons.local_offer_rounded),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               // Product Search Results
               Expanded(
                 child: BlocBuilder<ProductBloc, ProductState>(
                   builder: (context, state) {
                     if (state is ProductLoading) {
-                      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                      return const ProductGridSkeleton();
                     }
                     if (state is ProductLoaded) {
-                      final products = state.filteredProducts;
+                      final products = List<ProductEntity>.from(state.filteredProducts);
+
+                      // Apply sorting filter
+                      if (_sortBy == 'low_to_high') {
+                        products.sort((a, b) => a.price.compareTo(b.price));
+                      } else if (_sortBy == 'high_to_low') {
+                        products.sort((a, b) => b.price.compareTo(a.price));
+                      } else if (_sortBy == 'discount') {
+                        products.sort((a, b) => b.discountPercent.compareTo(a.discountPercent));
+                      }
 
                       if (products.isEmpty) {
                         return const Center(

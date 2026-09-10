@@ -17,7 +17,6 @@ class AppRepositoryImpl implements AppRepository {
   final String baseUrl;
   final AppDataSource? dataSource;
 
-  static const String _addressPrefsKey = 'saved_user_addresses';
   final List<AddressEntity> _addresses = [];
   UserEntity? _currentUser;
   String? _authToken;
@@ -30,9 +29,26 @@ class AppRepositoryImpl implements AppRepository {
     _loadAddressesFromPrefs();
   }
 
+  Future<String> _getStorageUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? userId = _currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      userId = prefs.getString('user_id');
+    }
+    if (userId == null || userId.isEmpty) {
+      userId = prefs.getString('guest_user_id');
+      if (userId == null || userId.isEmpty) {
+        userId = 'usr_guest_${DateTime.now().millisecondsSinceEpoch}';
+        await prefs.setString('guest_user_id', userId);
+      }
+    }
+    return userId;
+  }
+
   Future<void> _saveAddressesToPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final userId = await _getStorageUserId();
       final listJson = _addresses.map((a) => {
         'id': a.id,
         'name': a.name,
@@ -48,7 +64,7 @@ class AppRepositoryImpl implements AppRepository {
         'longitude': a.longitude,
         'altitude': a.altitude,
       }).toList();
-      await prefs.setString(_addressPrefsKey, jsonEncode(listJson));
+      await prefs.setString('saved_user_addresses_$userId', jsonEncode(listJson));
     } catch (e) {
       debugPrint('Error saving addresses to prefs: $e');
     }
@@ -57,10 +73,11 @@ class AppRepositoryImpl implements AppRepository {
   Future<void> _loadAddressesFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_addressPrefsKey);
+      final userId = await _getStorageUserId();
+      final raw = prefs.getString('saved_user_addresses_$userId');
+      _addresses.clear();
       if (raw != null && raw.isNotEmpty) {
         final List decoded = jsonDecode(raw);
-        _addresses.clear();
         for (var item in decoded) {
           final m = item as Map<String, dynamic>;
           _addresses.add(AddressEntity(
@@ -92,6 +109,16 @@ class AppRepositoryImpl implements AppRepository {
     if (_authToken != null && _authToken!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $_authToken';
     }
+    final userId = await _getStorageUserId();
+    headers['X-User-ID'] = userId;
+
+    String? userEmail = _currentUser?.email;
+    if (userEmail == null || userEmail.isEmpty) {
+      userEmail = prefs.getString('user_email');
+    }
+    if (userEmail != null && userEmail.isNotEmpty && !userEmail.contains('guest@')) {
+      headers['X-User-Email'] = userEmail;
+    }
     return headers;
   }
 
@@ -114,12 +141,21 @@ class AppRepositoryImpl implements AppRepository {
           await prefs.setString('auth_token', _authToken!);
         }
 
+        final uId = userJson['id']?.toString() ?? 'usr_${DateTime.now().millisecondsSinceEpoch}';
+        final uName = userJson['name']?.toString() ?? email.split('@')[0];
+        final uEmail = userJson['email']?.toString() ?? email;
+
+        await prefs.setString('user_id', uId);
+        await prefs.setString('user_name', uName);
+        await prefs.setString('user_email', uEmail);
+
         _currentUser = UserEntity(
-          id: userJson['id']?.toString() ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
-          name: userJson['name']?.toString() ?? email.split('@')[0],
-          email: userJson['email']?.toString() ?? email,
+          id: uId,
+          name: uName,
+          email: uEmail,
           phone: userJson['phone']?.toString() ?? '+91 9876543210',
           avatarUrl: userJson['avatarUrl']?.toString(),
+          isGuest: false,
         );
         return _currentUser!;
       } else {
@@ -128,11 +164,18 @@ class AppRepositoryImpl implements AppRepository {
       }
     } catch (e) {
       // Direct fallback if offline/mock user
+      final fallbackId = 'usr_${DateTime.now().millisecondsSinceEpoch}';
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_id', fallbackId);
+      await prefs.setString('user_name', email.split('@')[0]);
+      await prefs.setString('user_email', email);
+
       _currentUser = UserEntity(
-        id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+        id: fallbackId,
         name: email.split('@')[0],
         email: email,
         phone: '+91 9876543210',
+        isGuest: false,
       );
       return _currentUser!;
     }
@@ -157,11 +200,20 @@ class AppRepositoryImpl implements AppRepository {
           await prefs.setString('auth_token', _authToken!);
         }
 
+        final uId = userJson['id']?.toString() ?? 'usr_${DateTime.now().millisecondsSinceEpoch}';
+        final uName = userJson['name']?.toString() ?? name;
+        final uEmail = userJson['email']?.toString() ?? email;
+
+        await prefs.setString('user_id', uId);
+        await prefs.setString('user_name', uName);
+        await prefs.setString('user_email', uEmail);
+
         _currentUser = UserEntity(
-          id: userJson['id']?.toString() ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
-          name: userJson['name']?.toString() ?? name,
-          email: userJson['email']?.toString() ?? email,
+          id: uId,
+          name: uName,
+          email: uEmail,
           phone: '+91 9876543210',
+          isGuest: false,
         );
         return _currentUser!;
       } else {
@@ -169,11 +221,18 @@ class AppRepositoryImpl implements AppRepository {
         throw Exception(err['error'] ?? 'Sign up failed');
       }
     } catch (e) {
+      final fallbackId = 'usr_${DateTime.now().millisecondsSinceEpoch}';
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_id', fallbackId);
+      await prefs.setString('user_name', name);
+      await prefs.setString('user_email', email);
+
       _currentUser = UserEntity(
-        id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+        id: fallbackId,
         name: name,
         email: email,
         phone: '+91 9876543210',
+        isGuest: false,
       );
       return _currentUser!;
     }
@@ -224,14 +283,19 @@ class AppRepositoryImpl implements AppRepository {
                 await prefs.setString('auth_token', _authToken!);
               }
 
+              final actualUserId = userJson['id']?.toString() ?? fbUser.uid;
+              await prefs.setString('user_id', actualUserId);
+
               _currentUser = UserEntity(
-                id: userJson['id']?.toString() ?? fbUser.uid,
+                id: actualUserId,
                 name: userJson['name']?.toString() ?? gName,
                 email: userJson['email']?.toString() ?? gEmail,
                 phone: userJson['phone']?.toString() ?? '',
                 avatarUrl: userJson['avatarUrl']?.toString() ?? gAvatar,
                 isGuest: false,
               );
+              _addresses.clear();
+              await getAddresses();
               return _currentUser!;
             }
           } catch (e) {
@@ -246,6 +310,8 @@ class AppRepositoryImpl implements AppRepository {
             avatarUrl: gAvatar,
             isGuest: false,
           );
+          _addresses.clear();
+          await getAddresses();
           return _currentUser!;
         } else {
           throw Exception('Google Sign-In failed: No user returned');
@@ -451,6 +517,7 @@ class AppRepositoryImpl implements AppRepository {
       phone: '+91 9999999999',
       isGuest: true,
     );
+    _addresses.clear();
     return _currentUser!;
   }
 
@@ -516,13 +583,12 @@ class AppRepositoryImpl implements AppRepository {
       final savedName = prefs.getString('user_name');
       final savedEmail = prefs.getString('user_email');
       final savedAvatar = prefs.getString('user_avatar');
-      final isGoogleUser = prefs.getBool('is_google_user') ?? false;
 
-      if (savedId != null && savedId.isNotEmpty && isGoogleUser) {
+      if (savedId != null && savedId.isNotEmpty && savedEmail != null && savedEmail.isNotEmpty && !savedEmail.contains('guest@')) {
         _currentUser = UserEntity(
           id: savedId,
-          name: savedName ?? 'Google User',
-          email: savedEmail ?? 'google_user@funfillers.com',
+          name: savedName ?? savedEmail.split('@')[0],
+          email: savedEmail,
           phone: '',
           avatarUrl: savedAvatar,
           isGuest: false,
@@ -538,6 +604,7 @@ class AppRepositoryImpl implements AppRepository {
 
   @override
   Future<void> signOut() async {
+    _addresses.clear();
     try {
       await fb.FirebaseAuth.instance.signOut();
     } catch (e) {
@@ -552,6 +619,7 @@ class AppRepositoryImpl implements AppRepository {
       await prefs.remove('user_email');
       await prefs.remove('user_avatar');
       await prefs.remove('is_google_user');
+      await prefs.remove('guest_user_id');
     } catch (e) {
       debugPrint('SharedPreferences clear notice: $e');
     }
@@ -600,11 +668,25 @@ class AppRepositoryImpl implements AppRepository {
             }
           }
 
+          final rawSubs = map['subCategories'] as List? ?? [];
+          final subCategories = rawSubs.map((subMap) {
+            final sm = subMap as Map<String, dynamic>;
+            final sImg = sm['image']?.toString() ?? sm['icon']?.toString() ?? '';
+            return SubCategoryEntity(
+              id: sm['id']?.toString() ?? '',
+              categoryId: sm['categoryId']?.toString() ?? map['id']?.toString() ?? '',
+              name: sm['name']?.toString() ?? '',
+              iconImage: ApiConstants.sanitizeImageUrl(sImg.isNotEmpty ? sImg : img),
+              description: sm['description']?.toString() ?? '',
+            );
+          }).toList();
+
           return CategoryEntity(
             id: map['id']?.toString() ?? '',
             name: map['name']?.toString() ?? '',
-            iconImage: img.isNotEmpty ? img : 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=200',
-            itemCount: (map['itemCount'] as num?)?.toInt() ?? (map['subCategories'] as List?)?.length ?? 12,
+            iconImage: ApiConstants.sanitizeImageUrl(img.isNotEmpty ? img : 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=200'),
+            itemCount: (map['itemCount'] as num?)?.toInt() ?? subCategories.length,
+            subCategories: subCategories,
           );
         }).toList();
 
@@ -790,7 +872,21 @@ class AppRepositoryImpl implements AppRepository {
   Future<List<UserOrderEntity>> getOrders() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(Uri.parse('$baseUrl/orders/user'), headers: headers);
+      final prefs = await SharedPreferences.getInstance();
+      final userEmail = _currentUser?.email ?? prefs.getString('user_email') ?? '';
+      final userId = await _getStorageUserId();
+
+      final Uri uri;
+      if (userEmail.isNotEmpty || userId.isNotEmpty) {
+        final params = <String, String>{};
+        if (userEmail.isNotEmpty) params['email'] = userEmail;
+        if (userId.isNotEmpty) params['userId'] = userId;
+        uri = Uri.parse('$baseUrl/orders/user').replace(queryParameters: params);
+      } else {
+        uri = Uri.parse('$baseUrl/orders/user');
+      }
+
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final List dynamicList = jsonDecode(response.body);
@@ -825,8 +921,13 @@ class AppRepositoryImpl implements AppRepository {
             id: map['id']?.toString() ?? '',
             items: itemsList,
             totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? (map['total'] as num?)?.toDouble() ?? 0.0,
-            status: map['status']?.toString() ?? 'Processing',
-            paymentMethod: map['paymentMethod']?.toString() ?? 'UPI',
+            status: map['status']?.toString() ?? 'Pending',
+            paymentMethod: map['paymentMethod']?.toString() ?? 'Razorpay Online',
+            paymentId: map['paymentId']?.toString(),
+            refundId: map['refundId']?.toString(),
+            refundAmount: (map['refundAmount'] as num?)?.toDouble(),
+            refundStatus: map['refundStatus']?.toString(),
+            cancellationReason: map['cancellationReason']?.toString(),
             shippingAddress: _addresses.isNotEmpty ? _addresses.first : AddressEntity(
               id: 'addr_order',
               name: map['userName']?.toString() ?? 'Customer',
@@ -869,7 +970,15 @@ class AppRepositoryImpl implements AppRepository {
 
     try {
       final headers = await _getHeaders();
+      final prefs = await SharedPreferences.getInstance();
+      final userEmail = _currentUser?.email ?? prefs.getString('user_email') ?? '';
+      final userName = _currentUser?.name ?? prefs.getString('user_name') ?? '';
+      final userId = await _getStorageUserId();
+
       final bodyData = {
+        'userId': userId,
+        'userEmail': userEmail,
+        'userName': userName,
         'items': items.map((i) => {
           'productId': i.product.id,
           'productName': i.product.title,
@@ -904,6 +1013,50 @@ class AppRepositoryImpl implements AppRepository {
     _orders.removeWhere((o) => o.id == createdOrder.id);
     _orders.insert(0, createdOrder);
     return createdOrder;
+  }
+
+  @override
+  Future<Map<String, dynamic>> cancelOrder(String orderId, {String? reason}) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/orders/$orderId/cancel'),
+        headers: headers,
+        body: jsonEncode({'reason': reason ?? 'Cancelled by user'}),
+      );
+
+      final resData = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        // Update local state in _orders list
+        final index = _orders.indexWhere((o) => o.id == orderId);
+        if (index != -1) {
+          _orders[index] = _orders[index].copyWith(
+            status: 'Cancelled',
+            refundId: resData['refundId']?.toString(),
+            refundAmount: (resData['refundAmount'] as num?)?.toDouble(),
+            refundStatus: resData['refundStatus']?.toString(),
+            cancellationReason: reason,
+          );
+        }
+        return resData;
+      } else {
+        throw Exception(resData['error'] ?? 'Failed to cancel order');
+      }
+    } catch (e) {
+      // Local fallback for offline/mock mode
+      final index = _orders.indexWhere((o) => o.id == orderId);
+      if (index != -1) {
+        _orders[index] = _orders[index].copyWith(
+          status: 'Cancelled',
+          refundStatus: 'Initiated',
+          cancellationReason: reason,
+        );
+      }
+      return {
+        'message': 'Order cancelled successfully (Local update).',
+        'refundStatus': 'Initiated',
+      };
+    }
   }
 
   final List<ProductEntity> _wishlist = [];

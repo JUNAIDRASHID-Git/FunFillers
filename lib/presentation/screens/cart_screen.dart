@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/responsive.dart';
 import '../blocs/cart/cart_bloc.dart';
 import '../blocs/cart/cart_event.dart';
 import '../blocs/cart/cart_state.dart';
+import '../blocs/auth/auth_bloc.dart';
+import '../blocs/auth/auth_state.dart';
 import '../widgets/custom_button.dart';
 import 'checkout_screen.dart';
 
@@ -190,53 +193,81 @@ class CartScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    GestureDetector(
-                      onTap: () {
-                        context.read<CartBloc>().add(UpdateCartQuantityRequested(prod.id, item.quantity - 1));
+                    _buildQuantityButton(
+                      icon: Icons.remove,
+                      onPressed: () {
+                        if (item.quantity > 1) {
+                          context.read<CartBloc>().add(UpdateCartQuantityRequested(prod.id, item.quantity - 1));
+                        } else {
+                          context.read<CartBloc>().add(RemoveFromCartRequested(prod.id));
+                        }
                       },
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.cardBorder),
-                        ),
-                        child: const Icon(Icons.remove, size: 14, color: AppColors.textPrimary),
-                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Text(
                         '${item.quantity}',
-                        style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        context.read<CartBloc>().add(UpdateCartQuantityRequested(prod.id, item.quantity + 1));
+                    _buildQuantityButton(
+                      icon: Icons.add,
+                      onPressed: () {
+                        if (item.quantity < prod.stock) {
+                          context.read<CartBloc>().add(UpdateCartQuantityRequested(prod.id, item.quantity + 1));
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Cannot add more. Maximum available stock is ${prod.stock}.'),
+                              backgroundColor: AppColors.discountRed,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
                       },
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.cardBorder),
-                        ),
-                        child: const Icon(Icons.add, size: 14, color: AppColors.textPrimary),
-                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: AppColors.discountRed, size: 20),
+                      onPressed: () {
+                        context.read<CartBloc>().add(RemoveFromCartRequested(prod.id));
+                      },
                     ),
                   ],
                 ),
+                if (prod.stock <= 0) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Out of stock',
+                    style: TextStyle(color: AppColors.discountRed, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ] else if (item.quantity >= prod.stock) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Max stock reached (${prod.stock} available)',
+                    style: const TextStyle(color: AppColors.discountRed, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.textMuted, size: 20),
-            onPressed: () {
-              context.read<CartBloc>().add(RemoveFromCartRequested(prod.id));
-            },
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuantityButton({required IconData icon, required VoidCallback onPressed}) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.cardBorder),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, size: 16, color: AppColors.textPrimary),
+        onPressed: onPressed,
       ),
     );
   }
@@ -244,30 +275,37 @@ class CartScreen extends StatelessWidget {
   Widget _buildPriceSummaryContent(BuildContext context, CartState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Price Details',
-          style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
+        const Text('Order Summary', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Subtotal', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-            Text(CurrencyFormatter.format(state.subtotal), style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+            const Text('Subtotal', style: TextStyle(color: AppColors.textSecondary)),
+            Text(CurrencyFormatter.format(state.subtotal), style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
           ],
         ),
-        if (state.totalSavings > 0) ...[
-          const SizedBox(height: 6),
+        if (state.discountAmount > 0) ...[
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total Savings', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-              Text('-${CurrencyFormatter.format(state.totalSavings)}', style: const TextStyle(color: AppColors.successGreen, fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text('Discount', style: TextStyle(color: AppColors.textSecondary)),
+              Text('-${CurrencyFormatter.format(state.discountAmount)}', style: const TextStyle(color: AppColors.successGreen, fontWeight: FontWeight.w600)),
             ],
           ),
         ],
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Shipping', style: TextStyle(color: AppColors.textSecondary)),
+            Text(
+              state.shippingFee == 0 ? 'FREE' : CurrencyFormatter.format(state.shippingFee),
+              style: TextStyle(color: state.shippingFee == 0 ? Colors.green : AppColors.textPrimary, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
         const Divider(color: AppColors.cardBorder, height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -280,6 +318,30 @@ class CartScreen extends StatelessWidget {
         CustomButton(
           text: 'Proceed to Checkout',
           onPressed: () {
+            final overStockItems = state.items.where((i) => i.quantity > i.product.stock || i.product.stock <= 0).toList();
+            if (overStockItems.isNotEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Some items in your cart exceed available stock. Please adjust quantity before checkout.'),
+                  backgroundColor: AppColors.discountRed,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+              return;
+            }
+
+            final authState = context.read<AuthBloc>().state;
+            final bool isGuest = authState is! Authenticated || authState.user.isGuest;
+            if (isGuest) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please sign in to proceed with checkout.'),
+                  backgroundColor: AppColors.primary,
+                ),
+              );
+              context.push('/signin');
+              return;
+            }
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const CheckoutScreen()),

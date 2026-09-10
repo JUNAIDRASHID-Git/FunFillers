@@ -18,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/product_card.dart';
+import '../widgets/skeleton_widget.dart';
 import 'cart_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
@@ -66,9 +67,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           ),
           title: const Text('Product Details', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         ),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: const ProductDetailsSkeleton(),
       );
     }
 
@@ -198,7 +197,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                 // Purchase Stepper Row
                                 Row(
                                   children: [
-                                    _buildQuantityStepper(),
+                                    _buildQuantityStepper(productEntity),
                                     const SizedBox(width: 16),
                                     Expanded(child: _buildAddToCartButton(context, productEntity)),
                                   ],
@@ -287,7 +286,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ),
                     child: Row(
                       children: [
-                        _buildQuantityStepper(),
+                        _buildQuantityStepper(productEntity),
                         const SizedBox(width: 14),
                         Expanded(child: _buildAddToCartButton(context, productEntity)),
                       ],
@@ -564,11 +563,27 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               ),
             ),
           ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: (prod.stock > 0 ? AppColors.successGreen : AppColors.discountRed).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: (prod.stock > 0 ? AppColors.successGreen : AppColors.discountRed).withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            prod.stock > 0 ? 'In Stock (${prod.stock} available)' : 'Out of Stock',
+            style: TextStyle(
+              color: prod.stock > 0 ? AppColors.successGreen : AppColors.discountRed,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildQuantityStepper() {
+  Widget _buildQuantityStepper(ProductEntity prod) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.background,
@@ -589,7 +604,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.add_rounded, size: 18, color: AppColors.textPrimary),
-            onPressed: () => setState(() => _quantity++),
+            onPressed: () {
+              if (_quantity < prod.stock) {
+                setState(() => _quantity++);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Cannot add more. Maximum available stock is ${prod.stock}.'),
+                    backgroundColor: AppColors.discountRed,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
           ),
         ],
       ),
@@ -597,28 +624,31 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildAddToCartButton(BuildContext context, ProductEntity prod) {
+    final bool isOutOfStock = prod.stock <= 0;
     return CustomButton(
-      text: 'Add to Cart',
-      icon: Icons.shopping_bag_outlined,
-      onPressed: () {
-        context.read<CartBloc>().add(AddToCartRequested(product: prod, quantity: _quantity));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${prod.title} added to your cart!'),
-            backgroundColor: AppColors.primary,
-            action: SnackBarAction(
-              label: 'View Cart',
-              textColor: Colors.white,
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CartScreen()),
-                );
-              },
-            ),
-          ),
-        );
-      },
+      text: isOutOfStock ? 'Out of Stock' : 'Add to Cart',
+      icon: isOutOfStock ? Icons.block_rounded : Icons.shopping_bag_outlined,
+      onPressed: isOutOfStock
+          ? null
+          : () {
+              context.read<CartBloc>().add(AddToCartRequested(product: prod, quantity: _quantity));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${prod.title} added to your cart!'),
+                  backgroundColor: AppColors.primary,
+                  action: SnackBarAction(
+                    label: 'View Cart',
+                    textColor: Colors.white,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CartScreen()),
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
     );
   }
 
